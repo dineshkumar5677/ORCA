@@ -4,29 +4,33 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ORCA - Live Geospatial Marine Prototype</title>
-  
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet" />
+
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
-      darkMode: 'class',
       theme: {
         extend: {
           colors: {
-            ocean: {
-              950: '#030712',
-              900: '#061325',
-              850: '#0b1d3a',
-              800: '#0f274a',
-              700: '#173b6c',
-              600: '#0284c7',
-              500: '#0ea5e9',
-              400: '#38bdf8',
-            }
+            panel: '#eef2f3',      // side panels
+            surface: '#f8fafa',    // popups, coordinate box, selected rows
+            line: '#c9d3d6',       // dividers
+            ink: '#17252d',        // main text
+            muted: '#5b6b73',      // secondary text
+            marine: '#1d4e6b',     // primary blue
+            kelp: '#4b8a3f',       // chlorophyll
+            warn: '#d08a12',       // thermal / medium risk
+            alarm: '#c8322b',      // critical risk
+            restricted: '#9a2a83', // protected area (chart-style magenta)
           },
           fontFamily: {
-            sans: ['Inter', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace'],
+            sans: ['Barlow', 'system-ui', 'sans-serif'],
+            display: ['"Barlow Condensed"', 'Barlow', 'sans-serif'],
           }
         }
       }
@@ -42,57 +46,56 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-
   <style>
-    /* Dark CartoDB/Leaflet container styling */
+    body { font-family: 'Barlow', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+
+    /* Map */
     .leaflet-container {
-      background: #030712 !important;
+      background: #cfe0e6 !important;
       outline: none;
-      font-family: 'Inter', sans-serif;
+      font-family: 'Barlow', system-ui, sans-serif;
     }
+    .leaflet-tile-pane { filter: saturate(0.85); }
+
     .leaflet-popup-content-wrapper {
-      background: #0b1d3a !important;
-      color: #e2e8f0 !important;
-      border: 1px solid #1e3a5f !important;
-      border-radius: 8px !important;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.6) !important;
+      background: #f8fafa !important;
+      color: #17252d !important;
+      border: 1px solid #c9d3d6;
+      border-radius: 4px !important;
+      box-shadow: 0 2px 8px rgba(23, 37, 45, 0.25) !important;
     }
-    .leaflet-popup-tip {
-      background: #0b1d3a !important;
-      border: 1px solid #1e3a5f !important;
-    }
-    .custom-pulse-marker {
-      position: relative;
-    }
-    @keyframes sonar-ping {
-      0% { transform: scale(0.6); opacity: 0.9; }
-      100% { transform: scale(2.2); opacity: 0; }
-    }
-    .sonar-ring {
-      animation: sonar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-    }
-    .custom-scrollbar::-webkit-scrollbar {
-      width: 5px;
-      height: 5px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-track {
-      background: #061325;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #1e3a5f;
+    .leaflet-popup-tip { background: #f8fafa !important; }
+    .leaflet-popup-content { margin: 10px 12px !important; font-size: 13px; line-height: 1.4; }
+    .pop-name { font-size: 15px; font-weight: 600; }
+    .pop-id { color: #5b6b73; font-size: 12px; margin-bottom: 6px; }
+    .pop-row { display: flex; justify-content: space-between; gap: 16px; }
+    .pop-row span:first-child { color: #5b6b73; }
+    .pop-status { margin-top: 6px; padding-top: 6px; border-top: 1px solid #c9d3d6; font-weight: 600; }
+
+    .leaflet-tooltip.chart-tip {
+      background: #f8fafa;
+      color: #17252d;
+      border: 1px solid #c9d3d6;
       border-radius: 4px;
+      box-shadow: 0 1px 4px rgba(23, 37, 45, 0.2);
+      font-size: 12px;
+      padding: 5px 8px;
     }
+    .leaflet-tooltip.chart-tip::before { display: none; }
+    .leaflet-control-scale-line { color: #17252d; border-color: #17252d; }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #b5c3c8; border-radius: 3px; }
   </style>
 </head>
-<body class="bg-ocean-950 text-slate-100 overflow-hidden select-none">
+<body class="bg-panel text-ink font-sans overflow-hidden">
   <div id="root"></div>
 
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // Real Coordinates for the Bay of Bengal & Andaman Sea
+    // Coordinates in the Bay of Bengal & Andaman Sea
     const INITIAL_VESSELS = [
       { id: 'AIS-IND-902', name: 'Kalinga Star IV', type: 'Bottom Trawler', speed: '3.1 kn', heading: '184°', lat: 18.25, lon: 87.10, flag: 'IN', status: 'Suspicious Dragging Pattern', risk: 'CRITICAL', sst: '30.8°C', chloro: '4.2 mg/m³', insideMPA: true },
       { id: 'AIS-MM-441', name: 'Irrawaddy Scout', type: 'Longliner', speed: '8.4 kn', heading: '042°', lat: 15.65, lon: 91.20, flag: 'MM', status: 'Standard Transit Corridor', risk: 'LOW', sst: '28.9°C', chloro: '0.4 mg/m³', insideMPA: false },
@@ -111,52 +114,60 @@
       [20.5, 86.9]
     ];
 
-    function App() {
-      const [layers, setLayers] = useState({
-        chloro: true,
-        sst: true,
-        ais: true,
-        mpa: true,
-      });
+    // Colours used on the map and in the panels
+    const RISK_FILL = { CRITICAL: '#c8322b', MEDIUM: '#d08a12', LOW: '#1d4e6b' };
+    const RISK_TEXT = { CRITICAL: '#b02a24', MEDIUM: '#8a5c08', LOW: '#1d4e6b' };
+    const riskLabel = (r) => r.charAt(0) + r.slice(1).toLowerCase();
 
-      const [vessels, setVessels] = useState(INITIAL_VESSELS);
+    const LAYER_DEFS = [
+      { key: 'chloro', label: 'Chlorophyll (Copernicus)', color: '#4b8a3f', desc: 'Sentinel-3 plumes, mg/m³' },
+      { key: 'sst',    label: 'Sea surface temperature (NOAA)', color: '#d08a12', desc: 'Coral stress zones' },
+      { key: 'ais',    label: 'Vessels (AIS)', color: '#1d4e6b', desc: 'Position, heading and speed' },
+      { key: 'mpa',    label: 'Protected area', color: '#9a2a83', desc: 'No-trawl reserve boundary' },
+    ];
+
+    const fmtCoord = (value, pos, neg) =>
+      `${Math.abs(value).toFixed(3)}°${value >= 0 ? pos : neg}`;
+
+    function App() {
+      const [layers, setLayers] = useState({ chloro: true, sst: true, ais: true, mpa: true });
+      const [vessels] = useState(INITIAL_VESSELS);
       const [selectedVessel, setSelectedVessel] = useState(INITIAL_VESSELS[0]);
-      const [mapCenter, setMapCenter] = useState([16.5, 88.0]);
-      
-      const [debateLogs, setDebateLogs] = useState([
+      const [alertSent, setAlertSent] = useState(null); // { id, time }
+
+      const [debateLogs] = useState([
         {
           id: 1,
           sender: 'Copernicus Ecology Agent',
-          badge: 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300',
+          tone: '#3f7a35',
           time: '11:20:04',
           message: 'Anomalous turbidity plume (4.2 mg/m³) flagged in Sector B-4. High suspended sediment profile indicating physical benthic seabed disruption.'
         },
         {
           id: 2,
           sender: 'Vessel Tracking Agent',
-          badge: 'bg-cyan-950/80 border-cyan-500/50 text-cyan-300',
+          tone: '#1d4e6b',
           time: '11:20:18',
           message: 'Vessel Kalinga Star IV (AIS-IND-902) detected inside protected Sundarbans Sanctuary Zone. Kinematics: 3.1 kn with continuous zig-zag turns.'
         },
         {
           id: 3,
           sender: 'Risk Synthesis Agent (LLM)',
-          badge: 'bg-amber-950/80 border-amber-500/50 text-amber-300',
+          tone: '#b02a24',
           time: '11:20:35',
-          message: 'CROSS-STREAM VERDICT (96.4%): Unlicensed bottom trawling inside designated breeding habitat. Forwarded automated alert to Indian Coast Guard.'
+          message: 'Cross-stream verdict (96.4%): unlicensed bottom trawling inside designated breeding habitat. Automated alert forwarded to Indian Coast Guard.'
         }
       ]);
 
-      // Map reference
       const mapContainerRef = useRef(null);
       const leafletMapRef = useRef(null);
       const layerGroupRef = useRef({});
+      const coordRef = useRef(null);
 
-      // 1. Initialize Leaflet Map
+      // 1. Initialise the Leaflet map
       useEffect(() => {
         if (!mapContainerRef.current || leafletMapRef.current) return;
 
-        // Initialize map centered on Bay of Bengal
         const map = L.map(mapContainerRef.current, {
           center: [16.5, 88.0],
           zoom: 6,
@@ -165,23 +176,29 @@
           zoomControl: false,
         });
 
-        // Add CartoDB Dark Matter base tile layer (free and reliable)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        // CARTO Voyager: free light basemap, no API key
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
           attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap',
           subdomains: 'abcd',
           maxZoom: 19
         }).addTo(map);
 
-        // Put zoom control in top right
         L.control.zoom({ position: 'topright' }).addTo(map);
+        L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 120 }).addTo(map);
+
+        // Cursor position readout, updated directly in the DOM to avoid re-renders
+        map.on('mousemove', (e) => {
+          if (coordRef.current) {
+            coordRef.current.textContent = `${fmtCoord(e.latlng.lat, 'N', 'S')}   ${fmtCoord(e.latlng.lng, 'E', 'W')}`;
+          }
+        });
 
         leafletMapRef.current = map;
 
-        // Create feature groups for dynamic toggling
-        layerGroupRef.current.vessels = L.layerGroup().addTo(map);
         layerGroupRef.current.mpa = L.layerGroup().addTo(map);
         layerGroupRef.current.chloro = L.layerGroup().addTo(map);
         layerGroupRef.current.sst = L.layerGroup().addTo(map);
+        layerGroupRef.current.vessels = L.layerGroup().addTo(map);
 
         return () => {
           map.remove();
@@ -189,119 +206,90 @@
         };
       }, []);
 
-      // 2. Render & Update Map Layers
+      // 2. Draw and update the map layers
       useEffect(() => {
         const map = leafletMapRef.current;
         if (!map) return;
 
-        // --- LAYER: MPA Polygon ---
+        // Protected area
         layerGroupRef.current.mpa.clearLayers();
         if (layers.mpa) {
-          const mpaPolygon = L.polygon(MPA_POLYGON_COORDS, {
-            color: '#a855f7',
-            fillColor: '#9333ea',
-            fillOpacity: 0.12,
+          L.polygon(MPA_POLYGON_COORDS, {
+            color: '#9a2a83',
+            fillColor: '#9a2a83',
+            fillOpacity: 0.1,
             weight: 2,
-            dashArray: '6, 6'
-          }).bindTooltip("<b>Sundarbans Reserve MPA</b><br/>Zero Commercial Trawl Zone", {
-            sticky: true,
-            className: 'bg-ocean-900 text-purple-200 text-xs border border-purple-500/50 p-1.5 rounded'
-          });
-          layerGroupRef.current.mpa.addLayer(mpaPolygon);
+            dashArray: '8, 5'
+          })
+            .bindTooltip('<b>Sundarbans Reserve MPA</b><br/>No commercial trawling', { sticky: true, className: 'chart-tip' })
+            .addTo(layerGroupRef.current.mpa);
         }
 
-        // --- LAYER: Copernicus Chlorophyll Hotspots ---
+        // Chlorophyll
         layerGroupRef.current.chloro.clearLayers();
         if (layers.chloro) {
-          const chloroSpot1 = L.circle([18.2, 87.2], {
-            radius: 75000,
-            color: '#10b981',
-            fillColor: '#059669',
-            fillOpacity: 0.22,
-            weight: 1
-          }).bindTooltip("<b>Copernicus Chlorophyll Spike</b><br/>Density: 4.2 mg/m³ (Turbidity High)", { sticky: true });
+          L.circle([18.2, 87.2], { radius: 75000, color: '#3f7a35', fillColor: '#4b8a3f', fillOpacity: 0.25, weight: 1 })
+            .bindTooltip('<b>Chlorophyll spike</b><br/>4.2 mg/m³, high turbidity', { sticky: true, className: 'chart-tip' })
+            .addTo(layerGroupRef.current.chloro);
 
-          const chloroSpot2 = L.circle([20.4, 89.4], {
-            radius: 60000,
-            color: '#10b981',
-            fillColor: '#059669',
-            fillOpacity: 0.18,
-            weight: 1
-          }).bindTooltip("<b>Copernicus Estuarine Discharge</b><br/>Density: 3.1 mg/m³", { sticky: true });
-
-          layerGroupRef.current.chloro.addLayer(chloroSpot1);
-          layerGroupRef.current.chloro.addLayer(chloroSpot2);
+          L.circle([20.4, 89.4], { radius: 60000, color: '#3f7a35', fillColor: '#4b8a3f', fillOpacity: 0.2, weight: 1 })
+            .bindTooltip('<b>Estuarine discharge</b><br/>3.1 mg/m³', { sticky: true, className: 'chart-tip' })
+            .addTo(layerGroupRef.current.chloro);
         }
 
-        // --- LAYER: NOAA SST Anomaly Areas ---
+        // Sea surface temperature
         layerGroupRef.current.sst.clearLayers();
         if (layers.sst) {
-          const sstAnomaly = L.circle([12.0, 92.5], {
-            radius: 95000,
-            color: '#f59e0b',
-            fillColor: '#d97706',
-            fillOpacity: 0.2,
-            weight: 1
-          }).bindTooltip("<b>NOAA Thermal Stress Hotspot</b><br/>SST: +2.1°C Above Baseline", { sticky: true });
-
-          layerGroupRef.current.sst.addLayer(sstAnomaly);
+          L.circle([12.0, 92.5], { radius: 95000, color: '#b57407', fillColor: '#d08a12', fillOpacity: 0.22, weight: 1 })
+            .bindTooltip('<b>Thermal stress hotspot</b><br/>+2.1°C above baseline', { sticky: true, className: 'chart-tip' })
+            .addTo(layerGroupRef.current.sst);
         }
 
-        // --- LAYER: AIS Vessel Markers ---
+        // Vessels: an arrow that points along the vessel's heading
         layerGroupRef.current.vessels.clearLayers();
         if (layers.ais) {
-          vessels.forEach(vessel => {
+          vessels.forEach((vessel) => {
             const isSelected = selectedVessel && selectedVessel.id === vessel.id;
-            const isCritical = vessel.risk === 'CRITICAL';
-            const colorClass = isCritical ? 'bg-red-500' : (vessel.risk === 'MEDIUM' ? 'bg-amber-400' : 'bg-cyan-400');
-            const ringColor = isCritical ? 'rgba(239, 68, 68, 0.6)' : 'rgba(6, 182, 212, 0.4)';
+            const size = isSelected ? 34 : 26;
+            const hdg = parseInt(vessel.heading, 10) || 0;
+            const fill = RISK_FILL[vessel.risk];
 
-            const customHtml = `
-              <div class="custom-pulse-marker flex items-center justify-center cursor-pointer">
-                ${isCritical ? `<div class="sonar-ring absolute w-7 h-7 rounded-full" style="background:${ringColor}"></div>` : ''}
-                <div style="width:${isSelected ? '22px' : '16px'}; height:${isSelected ? '22px' : '16px'};" 
-                     class="${colorClass} rounded-full border-2 border-white shadow-lg flex items-center justify-center text-[9px] font-bold text-black transition-all">
-                  ${isCritical ? '!' : '▲'}
-                </div>
-              </div>
-            `;
+            const html = `
+              <div style="box-sizing:border-box;width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;border-radius:50%;cursor:pointer;${isSelected ? 'border:2px solid #17252d;background:rgba(255,255,255,0.55);' : ''}">
+                <svg width="20" height="20" viewBox="0 0 20 20" style="transform:rotate(${hdg}deg);filter:drop-shadow(0 1px 1.5px rgba(0,0,0,0.5))">
+                  <path d="M10 1.5 L16 17 L10 13.5 L4 17 Z" fill="${fill}" stroke="#ffffff" stroke-width="1.4" stroke-linejoin="round"/>
+                </svg>
+              </div>`;
 
             const icon = L.divIcon({
-              className: 'custom-div-icon',
-              html: customHtml,
-              iconSize: [24, 24],
-              iconAnchor: [12, 12]
+              className: '',
+              html,
+              iconSize: [size, size],
+              iconAnchor: [size / 2, size / 2]
             });
 
-            const marker = L.marker([vessel.lat, vessel.lon], { icon })
+            L.marker([vessel.lat, vessel.lon], { icon })
               .on('click', () => {
                 setSelectedVessel(vessel);
                 map.panTo([vessel.lat, vessel.lon], { animate: true, duration: 0.8 });
               })
               .bindPopup(`
-                <div class="text-xs p-1">
-                  <div class="font-bold text-white text-sm">${vessel.name}</div>
-                  <div class="text-[11px] text-cyan-300 font-mono">${vessel.id} (${vessel.flag})</div>
-                  <div class="mt-2 text-slate-300">Type: <b>${vessel.type}</b></div>
-                  <div class="text-slate-300">Speed: <b>${vessel.speed}</b> | HDG: <b>${vessel.heading}</b></div>
-                  <div class="mt-1 text-amber-300">SST: ${vessel.sst} | Chl: ${vessel.chloro}</div>
-                  <div class="mt-2 font-bold ${isCritical ? 'text-red-400' : 'text-emerald-400'}">
-                    Risk: ${vessel.risk} (${vessel.status})
-                  </div>
+                <div>
+                  <div class="pop-name">${vessel.name}</div>
+                  <div class="pop-id">${vessel.id}, flag ${vessel.flag}</div>
+                  <div class="pop-row"><span>Type</span><span>${vessel.type}</span></div>
+                  <div class="pop-row"><span>Speed</span><span>${vessel.speed}</span></div>
+                  <div class="pop-row"><span>Heading</span><span>${vessel.heading}</span></div>
+                  <div class="pop-row"><span>Water temp</span><span>${vessel.sst}</span></div>
+                  <div class="pop-row"><span>Chlorophyll</span><span>${vessel.chloro}</span></div>
+                  <div class="pop-status" style="color:${RISK_TEXT[vessel.risk]}">${riskLabel(vessel.risk)} risk: ${vessel.status}</div>
                 </div>
-              `);
-
-            layerGroupRef.current.vessels.addLayer(marker);
+              `)
+              .addTo(layerGroupRef.current.vessels);
           });
         }
       }, [layers, vessels, selectedVessel]);
 
-      // Re-trigger Lucide icons on DOM updates
-      useEffect(() => {
-        if (window.lucide) window.lucide.createIcons();
-      }, [layers, selectedVessel, debateLogs]);
-
-      // Pan to vessel on selection from sidebar
       const focusOnVessel = (vessel) => {
         setSelectedVessel(vessel);
         if (leafletMapRef.current) {
@@ -309,170 +297,159 @@
         }
       };
 
+      const toggleLayer = (key) => setLayers((prev) => ({ ...prev, [key]: !prev[key] }));
+
+      const sendAlert = () => {
+        const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+        setAlertSent({ id: selectedVessel.id, time });
+      };
+      const sentForSelected = alertSent && alertSent.id === selectedVessel.id;
+
       return (
-        <div className="h-screen w-screen flex flex-col bg-ocean-950 font-sans">
-          
-          {/* Top Bar */}
-          <header className="h-14 bg-ocean-900 border-b border-ocean-800 px-6 flex items-center justify-between z-10">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center text-cyan-400">
-                <i data-lucide="waves" className="w-4 h-4"></i>
-              </div>
-              <div>
-                <span className="font-extrabold text-lg text-white font-mono tracking-wider">ORCA</span>
-                <span className="text-[10px] text-emerald-400 font-semibold ml-2 uppercase px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30">
-                  SIH26176 · Team Spark
-                </span>
-              </div>
+        <div className="h-screen w-screen flex flex-col bg-panel">
+
+          {/* Top bar */}
+          <header className="h-14 shrink-0 bg-surface border-b border-line px-5 flex items-center justify-between">
+            <div className="flex items-baseline gap-4">
+              <span className="font-display text-3xl font-bold text-marine leading-none">ORCA</span>
+              <span className="text-sm text-muted">Team Spark, SIH26176</span>
             </div>
 
-            <div className="flex items-center gap-4 text-xs font-mono">
-              <span className="flex items-center gap-1.5 text-emerald-400">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                MAP ENGINE: LEAFLET (LIVE)
-              </span>
-              <span className="text-slate-500">|</span>
-              <span className="text-slate-400">DATA: BAY OF BENGAL RADAR</span>
+            <div className="text-sm text-muted hidden md:block">
+              Bay of Bengal and Andaman Sea
             </div>
 
-            <button 
+            <button
               onClick={() => {
                 if (leafletMapRef.current) leafletMapRef.current.setView([16.5, 88.0], 6);
               }}
-              className="px-3 py-1 bg-ocean-800 hover:bg-ocean-700 text-xs rounded border border-ocean-700 text-slate-200 flex items-center gap-1.5 transition"
+              className="px-3 py-1.5 text-sm font-medium text-marine bg-white border border-marine/40 rounded hover:bg-marine hover:text-white transition-colors"
             >
-              <i data-lucide="rotate-ccw" className="w-3.5 h-3.5 text-cyan-400"></i>
-              Reset Sector View
+              Reset view
             </button>
           </header>
 
-          {/* Main Body */}
+          {/* Main body */}
           <div className="flex-1 flex overflow-hidden">
-            
-            {/* Left Control & Telemetry Panel */}
-            <aside className="w-72 bg-ocean-900/95 border-r border-ocean-800 p-4 flex flex-col justify-between overflow-y-auto custom-scrollbar z-10">
-              <div className="space-y-4">
-                
-                {/* Health Score */}
-                <div className="bg-ocean-950 p-3.5 rounded-xl border border-ocean-800">
-                  <div className="text-[10px] font-mono text-slate-400 uppercase">Ecosystem Health Score</div>
-                  <div className="text-3xl font-extrabold text-emerald-400 mt-1 font-mono">68.4 <span className="text-xs text-slate-500">/ 100</span></div>
-                  <div className="w-full bg-ocean-900 h-1.5 rounded-full mt-2 overflow-hidden">
-                    <div className="bg-gradient-to-r from-emerald-500 to-cyan-400 h-full w-[68%]"></div>
-                  </div>
-                </div>
 
-                {/* Layer Switcher */}
-                <div className="space-y-2">
-                  <span className="text-[11px] font-mono text-slate-400 uppercase font-bold block">Telemetry Layers</span>
-                  
-                  {[
-                    { key: 'chloro', label: 'Copernicus Chlorophyll', color: 'bg-emerald-400', desc: 'Sentinel-3 Plumes (mg/m³)' },
-                    { key: 'sst', label: 'NOAA SST Thermal Anomaly', color: 'bg-amber-400', desc: 'Coral stress zones' },
-                    { key: 'ais', label: 'AIS Vessel Vectors', color: 'bg-cyan-400', desc: 'Live kinematics & trawl paths' },
-                    { key: 'mpa', label: 'Protected Sanctuary (MPA)', color: 'bg-purple-400', desc: 'No-trawl reserve polygons' },
-                  ].map(item => (
-                    <button
-                      key={item.key}
-                      onClick={() => setLayers(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
-                      className={`w-full text-left p-2.5 rounded-lg border text-xs transition ${
-                        layers[item.key] 
-                          ? 'bg-ocean-950 border-cyan-500/40 text-white' 
-                          : 'bg-ocean-950/40 border-ocean-800 text-slate-500'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${layers[item.key] ? item.color : 'bg-slate-700'}`}></span>
-                          {item.label}
-                        </span>
-                        <span className="text-[10px] font-mono">{layers[item.key] ? 'ON' : 'OFF'}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-1 ml-4">{item.desc}</div>
-                    </button>
-                  ))}
-                </div>
+            {/* Left panel */}
+            <aside className="w-72 shrink-0 bg-panel border-r border-line flex flex-col overflow-y-auto custom-scrollbar">
 
-                {/* Vessels Quick List */}
-                <div className="space-y-1.5 pt-2 border-t border-ocean-800">
-                  <span className="text-[11px] font-mono text-slate-400 uppercase font-bold block">Active Fleet</span>
-                  {vessels.map(v => (
-                    <div 
-                      key={v.id}
-                      onClick={() => focusOnVessel(v)}
-                      className={`p-2 rounded cursor-pointer border text-xs transition flex items-center justify-between ${
-                        selectedVessel.id === v.id 
-                          ? 'bg-ocean-800 border-cyan-500 text-white' 
-                          : 'bg-ocean-950 border-ocean-800/80 text-slate-300 hover:bg-ocean-850'
-                      }`}
-                    >
-                      <div>
-                        <div className="font-semibold">{v.name}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">{v.type}</div>
-                      </div>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                        v.risk === 'CRITICAL' ? 'bg-red-950 text-red-400' : 'bg-cyan-950 text-cyan-300'
-                      }`}>
-                        {v.speed}
+              <section className="p-4 border-b border-line">
+                <div className="text-sm text-muted">Ecosystem health</div>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="font-display text-5xl font-semibold text-ink leading-none">68.4</span>
+                  <span className="text-sm text-muted">out of 100</span>
+                </div>
+                <div className="h-1.5 bg-[#d3dde0] rounded-sm mt-3">
+                  <div className="h-full bg-marine rounded-sm" style={{ width: '68.4%' }}></div>
+                </div>
+              </section>
+
+              <section className="px-4 pt-3 pb-2 border-b border-line">
+                <h2 className="text-sm font-semibold text-ink mb-1">Map layers</h2>
+                {LAYER_DEFS.map((item) => (
+                  <label key={item.key} className="flex items-start gap-3 py-2.5 border-t border-line/70 first:border-t-0 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={layers[item.key]}
+                      onChange={() => toggleLayer(item.key)}
+                      className="mt-1 h-4 w-4 accent-[#1d4e6b]"
+                    />
+                    <span className="flex-1">
+                      <span className="flex items-center gap-2 text-sm font-medium text-ink">
+                        <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: item.color }}></span>
+                        {item.label}
                       </span>
-                    </div>
+                      <span className="block text-xs text-muted mt-0.5 ml-[18px]">{item.desc}</span>
+                    </span>
+                  </label>
+                ))}
+              </section>
+
+              <section className="pt-3 flex-1">
+                <h2 className="text-sm font-semibold text-ink px-4 mb-1">Vessels in range</h2>
+                <ul>
+                  {vessels.map((v) => (
+                    <li key={v.id} className="border-t border-line/70">
+                      <button
+                        onClick={() => focusOnVessel(v)}
+                        className={`w-full text-left flex items-center justify-between gap-3 pl-3 pr-4 py-2 border-l-4 transition-colors ${
+                          selectedVessel.id === v.id ? 'bg-white' : 'hover:bg-surface'
+                        }`}
+                        style={{ borderLeftColor: RISK_FILL[v.risk] }}
+                      >
+                        <span>
+                          <span className="block text-sm font-medium text-ink">{v.name}</span>
+                          <span className="block text-xs text-muted">{v.type}</span>
+                        </span>
+                        <span className="text-right">
+                          <span className="block text-sm text-ink">{v.speed}</span>
+                          <span className="block text-xs font-medium" style={{ color: RISK_TEXT[v.risk] }}>{riskLabel(v.risk)}</span>
+                        </span>
+                      </button>
+                    </li>
                   ))}
-                </div>
+                </ul>
+              </section>
 
-              </div>
-
-              <div className="text-[10px] text-slate-500 font-mono pt-3 border-t border-ocean-800">
+              <div className="text-xs text-muted p-4 border-t border-line">
                 Sant Longowal Institute of Engineering and Technology
               </div>
             </aside>
 
-            {/* Center: Leaflet Live Map Canvas */}
+            {/* Map */}
             <main className="flex-1 relative">
               <div ref={mapContainerRef} className="w-full h-full"></div>
+              <div
+                ref={coordRef}
+                className="absolute left-3 top-3 z-[1000] bg-surface/95 border border-line rounded px-2.5 py-1 text-xs text-ink pointer-events-none"
+              >
+                Move the cursor over the map
+              </div>
             </main>
 
-            {/* Right: Multi-Agent Consensus Stream */}
-            <aside className="w-96 bg-ocean-900/95 border-l border-ocean-800 flex flex-col justify-between z-10">
-              <div className="p-3.5 border-b border-ocean-800 bg-ocean-950 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <i data-lucide="cpu" className="w-4 h-4 text-cyan-400"></i>
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                    Agent Reasoning Loop
-                  </span>
-                </div>
-                <span className="text-[10px] text-slate-400 font-mono">LLaMA 2 + LangChain</span>
+            {/* Right panel */}
+            <aside className="w-96 shrink-0 bg-panel border-l border-line flex flex-col">
+              <div className="px-4 py-3 border-b border-line flex items-baseline justify-between">
+                <h2 className="text-sm font-semibold text-ink">Agent log</h2>
+                <span className="text-xs text-muted">LLaMA 2 with LangChain</span>
               </div>
 
-              <div className="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar bg-ocean-950/40 text-xs">
-                {debateLogs.map(log => (
-                  <div key={log.id} className="p-3 rounded-lg bg-ocean-900 border border-ocean-800 shadow-sm">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${log.badge}`}>
-                        {log.sender}
-                      </span>
-                      <span className="text-[10px] text-slate-500 font-mono">{log.time}</span>
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {debateLogs.map((log) => (
+                  <div key={log.id} className="px-4 py-3 border-b border-line/70 border-l-4" style={{ borderLeftColor: log.tone }}>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <span className="text-sm font-semibold" style={{ color: log.tone }}>{log.sender}</span>
+                      <span className="text-xs text-muted">{log.time}</span>
                     </div>
-                    <p className="text-slate-300 leading-relaxed font-sans">{log.message}</p>
+                    <p className="text-sm text-ink leading-relaxed">{log.message}</p>
                   </div>
                 ))}
               </div>
 
-              {/* Action Box */}
-              <div className="p-4 bg-ocean-900 border-t border-ocean-800 space-y-2">
-                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300">
-                  <span>Synthesized Action Dossier:</span>
-                  <span className="text-emerald-400 font-mono">Confidence: 96.4%</span>
+              <div className="p-4 bg-surface border-t border-line">
+                <div className="flex items-baseline justify-between">
+                  <h3 className="text-sm font-semibold text-ink">Recommended action</h3>
+                  <span className="text-xs text-muted">96.4% confidence</span>
                 </div>
-                <p className="text-xs text-slate-300">
-                  Target vessel is dredging within 1.8km of sensitive nurseries. Coordinate verification completed.
+                <p className="text-sm text-ink mt-1.5 leading-relaxed">
+                  Target vessel is dredging within 1.8 km of sensitive nurseries. Coordinates verified.
                 </p>
                 <button
-                  onClick={() => alert(`Transmitted emergency interdiction dossier for ${selectedVessel.name} at coordinates [${selectedVessel.lat}, ${selectedVessel.lon}] to Coast Guard.`)}
-                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold py-2 px-3 rounded shadow transition flex items-center justify-center gap-2"
+                  onClick={sendAlert}
+                  disabled={sentForSelected}
+                  className={`mt-3 w-full text-sm font-semibold py-2 px-3 rounded text-white transition-colors ${
+                    sentForSelected ? 'bg-muted cursor-default' : 'bg-alarm hover:bg-[#a92721]'
+                  }`}
                 >
-                  <i data-lucide="send" className="w-3.5 h-3.5"></i>
-                  Dispatch Intercept Alert
+                  {sentForSelected ? 'Alert sent' : 'Send alert to Coast Guard'}
                 </button>
+                {sentForSelected && (
+                  <p className="text-xs text-muted mt-2">
+                    {selectedVessel.name} at {fmtCoord(selectedVessel.lat, 'N', 'S')}, {fmtCoord(selectedVessel.lon, 'E', 'W')} reported at {alertSent.time}.
+                  </p>
+                )}
               </div>
             </aside>
 
@@ -481,33 +458,7 @@
       );
     }
 
-    ReactDOM.render(<App />, document.getElementById('root'));
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
-```eof
-
-### Key Highlights of this Live Map Implementation:
-1. **Real Leaflet.js Engine**: Replaced static placeholders with an interactive Leaflet map instance centered over the Bay of Bengal (`[16.5, 88.0]`), using high-contrast, free **CartoDB Dark Matter** nautical tiles.
-2. **True Lat/Lon Coordinate Placement**:
-   - Vessels are plotted at real geographic coordinates.
-   - Clicking a vessel marker opens a rich Leaflet popup with telemetry (speed, heading, SST, chlorophyll, and risk).
-   - Selecting a vessel in the left sidebar smoothly pans the camera directly to its coordinates on the ocean.
-3. **Pulsing Anomaly Radars**:
-   - `AIS-IND-902` and `AIS-DK-019` feature animated CSS sonar ping rings to highlight active threats.
-4. **Interactive GIS Overlays**:
-   - **Copernicus Chlorophyll-a Plumes**: Semi-transparent green circular turbidity patches that can be toggled on/off.
-   - **NOAA SST Thermal Hotspots**: Amber thermal anomalies indicating coral stress around the Andaman archipelago.
-   - **Sundarbans Sanctuary Polygon**: A dashed purple geofence polygon indicating the no-trawl Marine Protected Area.
-5. **No API Keys Needed**: Everything runs out-of-the-box in any modern browser without configuring Mapbox tokens or paid services.To help you get the map working, the solution depends on the platform and library you are using. Below are the steps for the three most common setups:
-
----
-
-### 1. Web (Leaflet.js — Free, No API Key Required)
-
-If you are building an HTML/JavaScript web application, Leaflet is the easiest way to display an interactive map using OpenStreetMap.
-
-1. **Include Leaflet CSS & JS** inside your `<head>`:
-   ```html
-   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
